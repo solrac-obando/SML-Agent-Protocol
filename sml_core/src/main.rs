@@ -3,9 +3,11 @@ mod executor;
 mod tools;
 mod llm_bridge;
 mod stress_tests;
+mod ollama_client;
 
 use parser::{parse_sml_token, SmlCommand};
 use executor::dispatch;
+use ollama_client::OllamaClient;
 use std::env;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
@@ -33,6 +35,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if args.len() > 2 && args[1] == "--execute" {
             let result = dispatch(parse_sml_token(&args[2]).unwrap()).await;
             println!("{}", result);
+            return Ok(());
+        }
+
+        if args[1] == "--ollama" {
+            let model = args.get(2).cloned().unwrap_or_else(|| "qwen2.5-coder:3b".to_string());
+            ollama_chat_mode(model.as_str()).await?;
             return Ok(());
         }
     }
@@ -67,6 +75,87 @@ async fn interactive_mode() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(())
+}
+
+async fn ollama_chat_mode(model: &str) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n=== SML Chat con Ollama ({}) ===", model);
+    println!("Escribe tu pregunta (Ctrl+C para salir)\n");
+
+    let client = OllamaClient::new(model);
+    let mut messages = vec![
+        ollama_client::ChatMessage {
+            role: "system".to_string(),
+            content: client.system_prompt().to_string(),
+        }
+    ];
+
+    let stdin = tokio::io::stdin();
+    let mut reader = BufReader::new(stdin).lines();
+
+    loop {
+        print!("\n> ");
+        std::io::Write::flush(&mut std::io::stdout())?;
+
+        let line = match reader.next_line().await {
+            Ok(Some(l)) => l,
+            Ok(None) => break,
+            Err(_) => break,
+        };
+
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        messages.push(ollama_client::ChatMessage {
+            role: "user".to_string(),
+            content: line,
+        });
+
+        loop {
+            match client.chat_with_tools(messages.clone()).await {
+                Ok((response, commands)) => {
+                    messages.push(ollama_client::ChatMessage {
+                        role: "assistant".to_string(),
+                        content: response.clone(),
+                    });
+
+                    if response.contains("@") {
+                         println!("\n🤖: {}", response);
+                    } else if commands.is_empty() {
+                         println!("\n🤖: {}", response);
+                    }
+
+                    if !commands.is_empty() {
+                        println!("\n📟 Ejecutando herramientas:");
+                        let mut results = String::new();
+                        for cmd in &commands {
+                            print!("  {}", cmd);
+                            if let Some(parsed) = parse_sml_token(cmd) {
+                                let result = dispatch(parsed).await;
+                                println!(" → OK");
+                                results.push_str(&format!("\nResultado de {}: {}", cmd, result));
+                            }
+                        }
+                        
+                        messages.push(ollama_client::ChatMessage {
+                            role: "user".to_string(),
+                            content: format!("Resultados de ejecución:{}", results),
+                        });
+                        
+                        continue;
+                    }
+                    break;
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                    break;
+                }
+            }
+        }
+    }
+
+    println!("\n¡Hasta luego!");
     Ok(())
 }
 

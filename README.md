@@ -20,7 +20,10 @@ SML is an ultra-efficient protocol designed to replace traditional JSON/MCP sche
 ```bash
 cd sml_core
 cargo build --release
+# Single execution
 ./target/release/sml_core --execute "@[read:Cargo.toml]"
+# Interactive autonomous chat with Ollama
+./target/release/sml_core --ollama qwen2.5-coder:3b
 ```
 
 ### Supported SML Commands
@@ -52,7 +55,10 @@ SML es un protocolo ultra-eficiente diseñado para reemplazar los esquemas JSON/
 ```bash
 cd sml_core
 cargo build --release
+# Ejecución única
 ./target/release/sml_core --execute "@[read:Cargo.toml]"
+# Chat autónomo interactivo con Ollama
+./target/release/sml_core --ollama qwen2.5-coder:3b
 ```
 
 ### Comandos SML Soportados
@@ -84,7 +90,10 @@ SML é um protocolo ultra-eficiente projetado para substituir os esquemas tradic
 ```bash
 cd sml_core
 cargo build --release
+# Execução única
 ./target/release/sml_core --execute "@[read:Cargo.toml]"
+# Chat autônomo interativo com Ollama
+./target/release/sml_core --ollama qwen2.5-coder:3b
 ```
 
 ### Comandos SML Suportados
