@@ -1,0 +1,11 @@
+{
+  "name": "opencode-sml-plugin",
+  "version": "1.0.0",
+  "description": "Integración de SML (Symbolic Micro-Language) para OpenCode",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "@opencode-ai/plugin": "latest",
+    "@opencode-ai/sdk": "latest"
+  }
+}

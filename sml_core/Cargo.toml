@@ -1,0 +1,32 @@
+[package]
+name = "sml_core"
+version = "0.1.0"
+edition = "2021"
+authors = ["SML Development Team"]
+description = "Symbolic Micro-Language - Zero-allocation Protocol Dispatcher"
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+nom = "8.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-trait = "0.1"
+futures = "0.3"
+memchr = "2.5"
+tokio-stream = { version = "0.1", features = ["fs"] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+rand = "0.8"
+
+[[bench]]
+name = "parser_benchmark"
+harness = false
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+strip = true
