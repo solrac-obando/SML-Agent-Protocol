@@ -14,6 +14,9 @@ use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("SML Dispatcher v0.1.0 - Symbolic Micro-Language Protocol");
+    println!("Waiting for SML commands (format: @[command:arg1|arg2])...\n");
+
     let args: Vec<String> = env::args().collect();
     
     if args.len() > 1 {
@@ -24,11 +27,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         if args[1] == "--test-parser" {
             test_parser()?;
-            return Ok(());
-        }
-
-        if args[1] == "--bridge" {
-            crate::llm_bridge::start_ipc_bridge().await?;
             return Ok(());
         }
 
@@ -51,8 +49,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn interactive_mode() -> Result<(), Box<dyn std::error::Error>> {
-    println!("SML Dispatcher v0.1.0 - Symbolic Micro-Language Protocol");
-    println!("Waiting for SML commands (format: @[command:arg1|arg2])...\n");
     let (tx, mut rx) = mpsc::channel::<String>(100);
 
     let stdin = tokio::io::stdin();
@@ -72,6 +68,62 @@ async fn interactive_mode() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", result);
         } else if line.starts_with("@[") {
             println!("[ERR:INVALID_SYNTAX]");
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_benchmarks() -> Result<(), Box<dyn std::error::Error>> {
+    println!("Running micro-benchmarks...\n");
+    
+    let test_commands = [
+        "@[read:src/main.rs]",
+        "@[write:app.py|print('hello')]",
+        "@[term:cargo build]",
+        "@[read:config.json]",
+    ];
+
+    use std::time::Instant;
+
+    for cmd in &test_commands {
+        let start = Instant::now();
+        for _ in 0..10000 {
+            let _ = parse_sml_token(cmd);
+        }
+        let elapsed = start.elapsed();
+        println!("{}: {:.2}ns/op", cmd, elapsed.as_nanos() as f64 / 10000.0);
+    }
+
+    Ok(())
+}
+
+fn test_parser() -> Result<(), Box<dyn std::error::Error>> {
+    println!("Testing parser...\n");
+
+    let test_cases = [
+        ("@[read:src/main.rs]", Some(("read", vec!["src/main.rs"]))),
+        ("@[write:app.py|print('hello')]", Some(("write", vec!["app.py", "print('hello')"]))),
+        ("@[term:cargo build]", Some(("term", vec!["cargo build"]))),
+        ("@[read:]", Some(("read", vec![""]))),
+        ("plain text", None),
+        ("@[invalid", None),
+        ("not a command]", None),
+    ];
+
+    for (input, expected) in &test_cases {
+        let result = parse_sml_token(input);
+        match (result, expected) {
+            (Some(cmd), Some((tool, args))) => {
+                if cmd.tool == *tool && cmd.args.len() == args.len() {
+                    println!("✓ {} -> tool={}", input, cmd.tool);
+                } else {
+                    println!("✗ {} -> expected ({}, {:?}), got ({}, {:?})", input, tool, args, cmd.tool, cmd.args);
+                }
+            }
+            (None, None) => println!("✓ {} -> correctly rejected", input),
+            (Some(cmd), None) => println!("✗ {} -> should be rejected but got {}", input, cmd.tool),
+            (None, Some(_)) => println!("✗ {} -> should be accepted but was rejected", input),
         }
     }
 
@@ -131,6 +183,20 @@ async fn ollama_chat_mode(model: &str) -> Result<(), Box<dyn std::error::Error>>
                         let mut results = String::new();
                         for cmd in &commands {
                             print!("  {}", cmd);
+                            
+                            // Seguridad: Pedir confirmación para borrar
+                            if cmd.starts_with("@[delete:") {
+                                print!(" [!] ¿Confirmar borrado? (y/N): ");
+                                std::io::Write::flush(&mut std::io::stdout())?;
+                                let mut input = String::new();
+                                std::io::stdin().read_line(&mut input)?;
+                                if input.trim().to_lowercase() != "y" {
+                                    println!(" → CANCELADO");
+                                    results.push_str(&format!("\nResultado de {}: [ERR:USER_DENIED]", cmd));
+                                    continue;
+                                }
+                            }
+
                             if let Some(parsed) = parse_sml_token(cmd) {
                                 let result = dispatch(parsed).await;
                                 println!(" → OK");
@@ -143,6 +209,7 @@ async fn ollama_chat_mode(model: &str) -> Result<(), Box<dyn std::error::Error>>
                             content: format!("Resultados de ejecución:{}", results),
                         });
                         
+                        // Volvemos a llamar a Ollama para que procese los resultados
                         continue;
                     }
                     break;
@@ -156,61 +223,5 @@ async fn ollama_chat_mode(model: &str) -> Result<(), Box<dyn std::error::Error>>
     }
 
     println!("\n¡Hasta luego!");
-    Ok(())
-}
-
-async fn run_benchmarks() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Running micro-benchmarks...\n");
-    
-    let test_commands = [
-        "@[read:src/main.rs]",
-        "@[write:app.py|print('hello')]",
-        "@[term:cargo build]",
-        "@[read:config.json]",
-    ];
-
-    use std::time::Instant;
-
-    for cmd in &test_commands {
-        let start = Instant::now();
-        for _ in 0..10000 {
-            let _ = parse_sml_token(cmd);
-        }
-        let elapsed = start.elapsed();
-        println!("{}: {:.2}ns/op", cmd, elapsed.as_nanos() as f64 / 10000.0);
-    }
-
-    Ok(())
-}
-
-fn test_parser() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Testing parser...\n");
-
-    let test_cases = [
-        ("@[read:src/main.rs]", Some(("read", vec!["src/main.rs"]))),
-        ("@[write:app.py|print('hello')]", Some(("write", vec!["app.py", "print('hello')"]))),
-        ("@[term:cargo build]", Some(("term", vec!["cargo build"]))),
-        ("@[read:]", Some(("read", vec![""]))),
-        ("plain text", None),
-        ("@[invalid", None),
-        ("not a command]", None),
-    ];
-
-    for (input, expected) in &test_cases {
-        let result = parse_sml_token(input);
-        match (result, expected) {
-            (Some(cmd), Some((tool, args))) => {
-                if cmd.tool == *tool && cmd.args.len() == args.len() {
-                    println!("✓ {} -> tool={}", input, cmd.tool);
-                } else {
-                    println!("✗ {} -> expected ({}, {:?}), got ({}, {:?})", input, tool, args, cmd.tool, cmd.args);
-                }
-            }
-            (None, None) => println!("✓ {} -> correctly rejected", input),
-            (Some(cmd), None) => println!("✗ {} -> should be rejected but got {}", input, cmd.tool),
-            (None, Some(_)) => println!("✗ {} -> should be accepted but was rejected", input),
-        }
-    }
-
     Ok(())
 }
