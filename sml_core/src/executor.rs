@@ -1,6 +1,5 @@
 use crate::parser::SmlCommand;
 use crate::tools::opencode;
-use crate::tools::{custom_env, generic_env};
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -59,12 +58,6 @@ async fn dispatch_inner(cmd: &SmlCommand<'_>) -> Result<String, ExecutorError> {
             }
             opencode::write_file(cmd.args[0], cmd.args[1]).await
         }
-        "append" => {
-            if cmd.args.len() < 2 {
-                return Err(ExecutorError::UnknownCommand("append requires path and content".to_string()));
-            }
-            opencode::append_file(cmd.args[0], cmd.args[1]).await
-        }
         "term" => {
             if cmd.args.is_empty() {
                 return Err(ExecutorError::UnknownCommand("term requires command argument".to_string()));
@@ -90,56 +83,17 @@ async fn dispatch_inner(cmd: &SmlCommand<'_>) -> Result<String, ExecutorError> {
             }
             opencode::file_info(cmd.args[0]).await
         }
-        "sublime" => {
-            if cmd.args.is_empty() || cmd.args[0] != "open" || cmd.args.len() < 2 {
-                return Err(ExecutorError::UnknownCommand("sublime:open requires path".to_string()));
-            }
-            Ok(custom_env::sublime_open(cmd.args[1]))
-        }
-        "vscode" => {
-            if cmd.args.is_empty() || cmd.args[0] != "open" || cmd.args.len() < 2 {
-                return Err(ExecutorError::UnknownCommand("vscode:open requires path".to_string()));
-            }
-            Ok(custom_env::vscode_open(cmd.args[1]))
-        }
-        "python" => {
-            if cmd.args.is_empty() || cmd.args[0] != "run" || cmd.args.len() < 2 {
-                return Err(ExecutorError::UnknownCommand("python:run requires script path".to_string()));
-            }
-            Ok(custom_env::python_run(cmd.args[1]))
-        }
-        "browser" => {
+        "delete" => {
             if cmd.args.is_empty() {
-                return Err(ExecutorError::UnknownCommand("browser requires action".to_string()));
+                return Err(ExecutorError::UnknownCommand("delete requires path argument".to_string()));
             }
-            match cmd.args[0] {
-                "search" => {
-                    if cmd.args.len() < 2 {
-                        return Err(ExecutorError::UnknownCommand("browser:search requires query".to_string()));
-                    }
-                    Ok(custom_env::browser_search(cmd.args[1]))
-                }
-                "open" => {
-                    if cmd.args.len() < 2 {
-                        return Err(ExecutorError::UnknownCommand("browser:open requires url".to_string()));
-                    }
-                    Ok(generic_env::browser_open(cmd.args[1]))
-                }
-                _ => Err(ExecutorError::UnknownCommand(format!("browser:{}", cmd.args[0])))
-            }
+            opencode::delete_file(cmd.args[0]).await
         }
-        "office" => {
-            if cmd.args.is_empty() || cmd.args[0] != "writer" {
-                return Err(ExecutorError::UnknownCommand("office:writer requires valid action".to_string()));
+        "mkdir" => {
+            if cmd.args.is_empty() {
+                return Err(ExecutorError::UnknownCommand("mkdir requires path argument".to_string()));
             }
-            let path = if cmd.args.len() < 2 { "" } else { cmd.args[1] };
-            Ok(custom_env::libreoffice_writer(path))
-        }
-        "editor" => {
-            if cmd.args.is_empty() || cmd.args[0] != "open" || cmd.args.len() < 2 {
-                return Err(ExecutorError::UnknownCommand("editor:open requires path".to_string()));
-            }
-            Ok(generic_env::editor_open(cmd.args[1]))
+            opencode::create_dir(cmd.args[0]).await
         }
         _ => Err(ExecutorError::UnknownCommand(cmd.tool.to_string())),
     }

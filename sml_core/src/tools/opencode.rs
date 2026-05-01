@@ -34,35 +34,6 @@ pub async fn write_file(path: &str, content: &str) -> Result<String, ExecutorErr
     }
 }
 
-pub async fn append_file(path: &str, content: &str) -> Result<String, ExecutorError> {
-    let p = Path::new(path);
-    
-    if let Some(parent) = p.parent() {
-        if !parent.exists() {
-            if let Err(e) = fs::create_dir_all(parent).await {
-                return Err(ExecutorError::IoError(format!("Failed to create directory: {}", e)));
-            }
-        }
-    }
-
-    let mut options = tokio::fs::OpenOptions::new();
-    options.create(true).append(true);
-    
-    match options.open(path).await {
-        Ok(mut file) => {
-            use tokio::io::AsyncWriteExt;
-            match file.write_all(content.as_bytes()).await {
-                Ok(_) => Ok(format!("[APPEND_OK] {} ({} bytes appended)", path, content.len())),
-                Err(e) => Err(ExecutorError::IoError(e.to_string())),
-            }
-        }
-        Err(e) => match e.kind() {
-            std::io::ErrorKind::PermissionDenied => Err(ExecutorError::PermissionDenied(path.to_string())),
-            _ => Err(ExecutorError::IoError(e.to_string())),
-        },
-    }
-}
-
 pub async fn run_terminal(cmd: &str) -> Result<String, ExecutorError> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     
@@ -152,7 +123,18 @@ pub async fn file_info(path: &str) -> Result<String, ExecutorError> {
 }
 
 pub async fn delete_file(path: &str) -> Result<String, ExecutorError> {
-    match fs::remove_file(path).await {
+    let meta = match fs::metadata(path).await {
+        Ok(m) => m,
+        Err(e) => return Err(ExecutorError::IoError(e.to_string())),
+    };
+
+    let res = if meta.is_dir() {
+        fs::remove_dir_all(path).await
+    } else {
+        fs::remove_file(path).await
+    };
+
+    match res {
         Ok(_) => Ok(format!("[DELETE_OK] {}", path)),
         Err(e) => Err(ExecutorError::IoError(e.to_string())),
     }
