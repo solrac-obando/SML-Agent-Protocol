@@ -1,7 +1,7 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use crate::parser;
+
 
 #[derive(Debug, Clone)]
 pub struct OllamaClient {
@@ -109,10 +109,10 @@ Tú: @[list:.]"#.to_string()
     pub async fn chat_with_tools(&self, messages: Vec<ChatMessage>) -> Result<(String, Vec<String>), ClientError> {
         let response = self.chat(messages).await?;
         
-        let sml_regex = regex_lite::Regex::new(r"@\[([a-z_]+):([^\]]+)\]").map_err(ClientError::Regex)?;
-        let commands: Vec<String> = sml_regex
-            .find_iter(&response)
-            .map(|m| m.as_str().to_string())
+        // Usar el parser unificado en vez de regex
+        let commands: Vec<String> = parser::extract_sml_raw(&response)
+            .into_iter()
+            .map(|s| s.to_string())
             .collect();
 
         Ok((response, commands))
@@ -123,7 +123,6 @@ Tú: @[list:.]"#.to_string()
 pub enum ClientError {
     Network(reqwest::Error),
     Parse(reqwest::Error),
-    Regex(regex_lite::Error),
 }
 
 impl std::fmt::Display for ClientError {
@@ -131,7 +130,6 @@ impl std::fmt::Display for ClientError {
         match self {
             ClientError::Network(e) => write!(f, "[NETWORK_ERROR] {}", e),
             ClientError::Parse(e) => write!(f, "[PARSE_ERROR] {}", e),
-            ClientError::Regex(e) => write!(f, "[REGEX_ERROR] {}", e),
         }
     }
 }

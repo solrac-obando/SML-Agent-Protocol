@@ -4,6 +4,7 @@ mod tools;
 mod llm_bridge;
 mod stress_tests;
 mod ollama_client;
+mod http_server;
 
 use parser::{parse_sml_token, SmlCommand};
 use executor::dispatch;
@@ -39,6 +40,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if args[1] == "--ollama" {
             let model = args.get(2).cloned().unwrap_or_else(|| "qwen2.5-coder:3b".to_string());
             ollama_chat_mode(model.as_str()).await?;
+            return Ok(());
+        }
+
+        if args[1] == "--server" {
+            let port: u16 = args.get(2)
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(8080);
+            http_server::start_server(port).await?;
             return Ok(());
         }
     }

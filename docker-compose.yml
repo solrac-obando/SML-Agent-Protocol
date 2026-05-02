@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  sml-dispatcher:
+    build:
+      context: ./sml_core
+      dockerfile: Dockerfile
+    container_name: sml-dispatcher
+    volumes:
+      - ./project_data:/project
+      - ./config:/config
+    environment:
+      - RUST_LOG=info
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_CONTEXT_LENGTH=32768
+    ports:
+      - "11434:11434"
+      - "8080:8080"
+    networks:
+      - sml-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sml-ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_CONTEXT_LENGTH=32768
+      - OLLAMA_NUM_PARALLEL=2
+    ports:
+      - "11435:11434"
+    networks:
+      - sml-network
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 16G
+
+networks:
+  sml-network:
+    driver: bridge
+
+volumes:
+  ollama-data:
